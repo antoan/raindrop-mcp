@@ -211,6 +211,60 @@ To use the Raindrop MCP server with your AI assistant or MCP-compatible client, 
 
 For Claude Code or other MCP-compatible clients, this will register the Raindrop server under the name "raindrop" and make all of its resources and tools available to your AI assistant.
 
+## Troubleshooting
+
+### MCP Client Compatibility Issues
+
+If you experience errors when using the server with MCP clients (like Goose, Claude Desktop, etc.), try the following:
+
+#### **Validate with MCP Inspector**
+First, verify the server is working correctly using the official MCP Inspector:
+
+```bash
+RAINDROP_ACCESS_TOKEN="your-token-here" \
+npx @modelcontextprotocol/inspector \
+  --cli node build/index.js \
+  --method tools/list
+```
+
+If Inspector validation **succeeds** but your MCP client **fails**, the issue is likely in the client, not the server.
+
+#### **Common Error: "keyValidator._parse is not a function"**
+This error indicates a bug in the MCP client's schema validation. The raindrop-mcp server is fully compliant with MCP SDK 1.20.1 specifications.
+
+**Workaround:** Use the Raindrop.io API directly until the client bug is fixed:
+```bash
+# Get latest bookmark
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  "https://api.raindrop.io/rest/v1/raindrops/0?sort=-created&perpage=1"
+
+# Search bookmarks
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  "https://api.raindrop.io/rest/v1/raindrops/0?search=query"
+```
+
+#### **Schema Validation Errors**
+If you see schema-related errors:
+1. Ensure you're using the latest version: `bun install` or `npm install @adeze/raindrop-mcp@latest`
+2. Verify Zod version is 3.x (not 4.x): `cat package.json | grep '"zod"'`
+3. Rebuild the server: `bun run build`
+
+#### **Authentication Issues**
+- Verify your token in [Raindrop.io settings](https://app.raindrop.io/settings/integrations)
+- Test the token directly:
+  ```bash
+  curl -H "Authorization: Bearer YOUR_TOKEN" https://api.raindrop.io/rest/v1/user
+  ```
+- Check environment variables: `echo $RAINDROP_ACCESS_TOKEN`
+
+#### **Getting Help**
+- Check [GitHub Issues](https://github.com/adeze/raindrop-mcp/issues) for similar problems
+- File a new issue with:
+  - Your MCP client name and version
+  - Server version (`cat package.json | grep version`)
+  - Error message and steps to reproduce
+  - MCP Inspector validation results
+
 ## Development
 
 - **Testing:** `bun test`
@@ -268,9 +322,69 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **DXT Manifest:** Automated packaging and release via GitHub CLI.
 - **Continuous Integration:** Version tagging and manifest publishing are fully automated.
 
-## 📋 Recent Enhancements (v2.0.12)
+## 📋 Recent Enhancements
 
-### **MCP Resource Links Implementation** ✨ NEW
+### **MCP SDK 1.19+ JSON Schema Compatibility** ✨ LATEST (v2.0.13)
+
+#### **Problem Solved**
+The raindrop-mcp server was experiencing JSON Schema validation failures with MCP SDK 1.19+ and modern MCP clients (like Goose 1.11.1+). The root cause was an incompatibility between Zod 4.x and zod-to-json-schema 3.24.6, which was producing invalid JSON Schemas.
+
+#### **Changes Made**
+- **Downgraded Zod** from 4.1.9 → 3.23.8 for compatibility with zod-to-json-schema 3.24.6
+- **Added `toObjectJsonSchema()` helper** to convert Zod schemas to clean JSON Schema format
+- **Upgraded MCP SDK** to 1.20.1 for latest protocol features
+- **Removed experimental features** - removed `MCP_SCHEMA_MODE` environment variable (no longer needed)
+
+#### **Validation & Compatibility**
+✅ **Passes MCP Inspector validation** - all 10 tools validated with proper JSON Schema structure  
+✅ **Compatible with MCP SDK 1.20.1** - follows latest protocol specifications  
+✅ **Works with modern MCP clients** - Goose 1.11.1+, Claude Desktop, etc.  
+✅ **Backward compatible** - all existing functionality preserved  
+
+#### **Testing the Server**
+You can validate the server's JSON Schema compliance using the official MCP Inspector:
+
+```bash
+# Install and run MCP Inspector
+RAINDROP_ACCESS_TOKEN="your-token-here" \
+npx @modelcontextprotocol/inspector \
+  --cli node build/index.js \
+  --method tools/list
+```
+
+**Expected Result:** All tools should show valid JSON Schema with `type: "object"`:
+```json
+{
+  "name": "bookmark_search",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "search": { "type": "string", "description": "Full-text search query" },
+      "perPage": { "type": "number", "description": "Items per page (max 50)" },
+      "sort": { "type": "string", "description": "Sort order" }
+    },
+    "additionalProperties": false
+  }
+}
+```
+
+#### **Dependencies Updated**
+```json
+{
+  "@modelcontextprotocol/sdk": "^1.20.1",
+  "zod": "^3.23.8",
+  "zod-to-json-schema": "^3.24.6"
+}
+```
+
+#### **Migration Notes**
+- If upgrading from an older version, run `bun install` to get the correct Zod version
+- No configuration changes required - the server automatically uses JSON Schema format
+- All existing tools and resources continue to work as before
+
+---
+
+### **MCP Resource Links Implementation** (v2.0.12)
 - **Modern `resource_link` pattern** following MCP SDK v1.17.2 best practices
 - **Efficient data access** - tools return lightweight links instead of full data payloads
 - **Better performance** - clients fetch full bookmark/collection data only when needed
